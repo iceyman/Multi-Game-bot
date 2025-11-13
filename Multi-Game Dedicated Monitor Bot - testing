@@ -1,0 +1,684 @@
+# -*- coding: utf-8 -*-
+import os
+import asyncio
+import json
+import re
+from datetime import datetime
+from discord.ext import commands, tasks
+from discord import Intents, Status, Game, Embed, Colour
+from rcon.asyncio import RconAsync, RCONException
+
+# ==============================================================================
+# ⚠️ CONFIGURATION BLOCK ⚠️
+# Update these settings before running the bot.
+# ==============================================================================
+
+# --- DISCORD CONFIGURATION ---
+DISCORD_TOKEN = os.getenv('DISCORD_TOKEN', "YOUR_DISCORD_BOT_TOKEN_HERE")
+# Set these channel IDs to their respective channels on your Discord server.
+MC_CHANNEL_ID = int(os.getenv('MC_CHANNEL_ID', 0))       # Minecraft Status/Logs
+PAL_CHANNEL_ID = int(os.getenv('PAL_CHANNEL_ID', 0))     # Palworld Status/Logs/Saves
+ASA_CHANNEL_ID = int(os.getenv('ASA_CHANNEL_ID', 0))     # ASA Status/Logs/Saves
+ADMIN_CHANNEL_ID = int(os.getenv('ADMIN_CHANNEL_ID', 0)) # **MANDATORY FOR ALL COMMANDS**
+
+# --- GAME RCON CONFIGURATION ---
+MC_RCON_HOST = os.getenv('MC_RCON_HOST', "127.0.0.1")
+MC_RCON_PORT = int(os.getenv('MC_RCON_PORT', 25575))
+MC_RCON_PASSWORD = os.getenv('MC_RCON_PASSWORD', "YOUR_MC_RCON_PASSWORD_HERE")
+
+PAL_RCON_HOST = os.getenv('PAL_RCON_HOST', "127.0.0.1")
+PAL_RCON_PORT = int(os.getenv('PAL_RCON_PORT', 25576))
+PAL_RCON_PASSWORD = os.getenv('PAL_RCON_PASSWORD', "YOUR_PAL_RCON_PASSWORD_HERE")
+PAL_SAVE_INTERVAL = int(os.getenv('PAL_SAVE_INTERVAL', 30)) # Minutes
+
+ASA_RCON_HOST = os.getenv('ASA_RCON_HOST', "127.0.0.1")
+ASA_RCON_PORT = int(os.getenv('ASA_RCON_PORT', 25577))
+ASA_RCON_PASSWORD = os.getenv('ASA_RCON_PASSWORD', "YOUR_ASA_RCON_PASSWORD_HERE")
+ASA_SAVE_INTERVAL = int(os.getenv('ASA_SAVE_INTERVAL', 60)) # Minutes
+
+# --- BLACKLIST CONFIGURATION ---
+PALWORLD_BLACKLIST_FILE = "palworld_blacklist.json" # File to store banned Steam IDs
+
+# --- GLOBAL GAME CONFIGURATION DICTIONARY ---
+GAMES = {
+    'mc': {
+        'name': 'Minecraft',
+        'rcon_host': MC_RCON_HOST,
+        'rcon_port': MC_RCON_PORT,
+        'rcon_password': MC_RCON_PASSWORD,
+        'channel_id': MC_CHANNEL_ID,
+        'last_status': None
+    },
+    'pal': {
+        'name': 'Palworld',
+        'rcon_host': PAL_RCON_HOST,
+        'rcon_port': PAL_RCON_PORT,
+        'rcon_password': PAL_RCON_PASSWORD,
+        'channel_id': PAL_CHANNEL_ID,
+        'last_status': None,
+        'blacklist': set() # Initialized with load_blacklist() later
+    },
+    'asa': {
+        'name': 'ASA (Ark)',
+        'rcon_host': ASA_RCON_HOST,
+        'rcon_port': ASA_RCON_PORT,
+        'rcon_password': ASA_RCON_PASSWORD,
+        'channel_id': ASA_CHANNEL_ID,
+        'last_status': None
+    }
+}
+
+# ==============================================================================
+# BOT INITIALIZATION & HELPERS
+# ==============================================================================
+
+# Set up intents for the bot
+intents = Intents.default()
+intents.message_content = True  # Required for command processing
+intents.messages = True
+intents.guilds = True
+
+bot = commands.Bot(command_prefix='!', intents=intents, help_command=None)
+
+
+async def get_channel(channel_id):
+    """Safely retrieves a channel object."""
+    if channel_id == 0:
+        print(f"Error: Channel ID is set to 0. Please configure the required channel environment variables.")
+        return None
+    
+    # Wait until bot is ready to fetch channels
+    await bot.wait_until_ready()
+
+    channel = bot.get_channel(channel_id)
+    if channel is None:
+        print(f"Error: Could not find channel with ID {channel_id}. Check if the bot is in the server.")
+    return channel
+
+async def send_to_admin(message, embed=None):
+    """Sends a message to the dedicated Admin Channel."""
+    admin_channel = await get_channel(ADMIN_CHANNEL_ID)
+    if admin_channel:
+        await admin_channel.send(message, embed=embed)
+
+def is_admin_channel():
+    """Custom command check: Command must be executed in the ADMIN_CHANNEL_ID."""
+    async def predicate(ctx):
+        if ctx.channel.id == ADMIN_CHANNEL_ID:
+            return True
+        await ctx.send(
+            f"❌ This administrative command must be run in the dedicated admin channel: <#{ADMIN_CHANNEL_ID}>."
+        )
+        return False
+    return commands.check(predicate)
+
+# --- BLACKLIST HELPER FUNCTIONS ---
+
+def load_blacklist():
+    """Loads the Palworld blacklist from a JSON file."""
+    try:
+        if os.path.exists(PALWORLD_BLACKLIST_FILE):
+            with open(PALWORLD_BLACKLIST_FILE, 'r') as f:
+                # Expects a list of Steam IDs
+                data = json.load(f)
+                print(f"Loaded {len(data)} Steam IDs into Palworld blacklist.")
+                return set(data) # Use a set for fast lookup
+        else:
+            print(f"Palworld blacklist file not found. Starting with empty set.")
+            return set()
+    except Exception as e:
+        print(f"Error loading blacklist file: {e}")
+        return set()
+
+def save_blacklist(blacklist):
+    """Saves the Palworld blacklist to a JSON file."""
+    try:
+        with open(PALWORLD_BLACKLIST_FILE, 'w') as f:
+            # Convert set back to list for JSON serialization
+            json.dump(list(blacklist), f, indent=4)
+        print("Palworld blacklist saved successfully.")
+    except Exception as e:
+        print(f"Error saving blacklist file: {e}")
+
+
+async def check_rcon_status(game_id):
+    """Checks the RCON status and returns an RconAsync object, player count, and player list."""
+    config = GAMES[game_id]
+    rcon = RconAsync(
+        config['rcon_host'],
+        config['rcon_password'],
+        config['rcon_port']
+    )
+    
+    players_online = 0
+    player_list = [] # List of dicts: {'name', 'uid', 'steam_id'}
+    
+    try:
+        await rcon.connect(timeout=5)
+        
+        if game_id == 'mc':
+            response = await rcon.send_command("list")
+            await rcon.close()
+            # Minecraft response format: "There are X of a max of Y players online: player1, player2"
+            match = re.search(r"There are (\d+) of a max", response)
+            players_online = int(match.group(1)) if match else 0
+        
+        elif game_id in ['pal', 'asa']:
+            response = await rcon.send_command("ShowPlayers")
+            await rcon.close()
+
+            # Palworld/ASA parsing: "PlayerName,PlayerUID,SteamID"
+            lines = [line.strip() for line in response.split('\n') if line.strip() and not line.lower().startswith(('name', 'playername', 'uid', 'steamid'))]
+
+            for line in lines:
+                parts = line.split(',')
+                if len(parts) >= 3:
+                    # Stripping whitespace is crucial for correct Steam ID matching
+                    player_name = parts[0].strip()
+                    player_uid = parts[1].strip()
+                    steam_id = parts[2].strip()
+                    player_list.append({'name': player_name, 'uid': player_uid, 'steam_id': steam_id})
+                
+            players_online = len(player_list)
+        
+        # Return RCON object (if connection was established), number of players, and player list
+        return rcon, players_online, player_list
+    
+    except RCONException as e:
+        # Authentication or command execution failed (still online but wrong password)
+        print(f"[{config['name']}] RCON Auth/Command Error: {e}")
+        return None, -1, []
+    except (ConnectionRefusedError, asyncio.TimeoutError) as e:
+        # Server is offline/unresponsive
+        return None, 0, []
+    except Exception as e:
+        # Other unexpected errors
+        print(f"[{config['name']}] Unexpected RCON Error: {e}")
+        return None, 0, []
+
+# ==============================================================================
+# DISCORD EVENTS / BACKGROUND TASKS
+# ==============================================================================
+
+@bot.event
+async def on_ready():
+    """Called when the bot successfully connects to Discord."""
+    print(f'Bot connected as {bot.user}')
+    
+    # Initialize Palworld Blacklist
+    GAMES['pal']['blacklist'] = load_blacklist()
+
+    # Start all background loops
+    status_monitor.start()
+    if PAL_SAVE_INTERVAL > 0:
+        pal_auto_save.start()
+        pal_blacklist_monitor.start() # Start the new monitoring task
+    if ASA_SAVE_INTERVAL > 0:
+        asa_auto_save.start()
+        
+    await bot.change_presence(activity=Game(name="Monitoring Servers..."))
+
+
+# --- PALWORLD TASKS ---
+
+@tasks.loop(minutes=PAL_SAVE_INTERVAL)
+async def pal_auto_save():
+    """Automatically saves the Palworld server world."""
+    await bot.wait_until_ready()
+    
+    config = GAMES['pal']
+    pal_channel = await get_channel(config['channel_id'])
+    if not pal_channel: return
+
+    rcon, _, _ = await check_rcon_status('pal')
+    if rcon:
+        try:
+            # Notify before save
+            await pal_channel.send("💾 **Palworld:** Starting automatic world save...")
+            await rcon.send_command("Save")
+            await rcon.close()
+            await pal_channel.send("✅ **Palworld:** World save complete.")
+        except Exception as e:
+            await pal_channel.send(f"❌ **Palworld Save Failed:** An RCON error occurred during save: `{e}`")
+        finally:
+            if rcon.is_connected:
+                await rcon.close()
+
+@tasks.loop(seconds=15) # Check every 15 seconds for blacklisted players
+async def pal_blacklist_monitor():
+    """Checks all online Palworld players against the blacklist and kicks banned Steam IDs."""
+    
+    config = GAMES['pal']
+    pal_channel = await get_channel(config['channel_id'])
+    if not pal_channel: return
+    
+    # Check RCON status and get the player list (Steam IDs and names)
+    rcon, players_online, player_list = await check_rcon_status('pal')
+    
+    if rcon and players_online > 0:
+        blacklist = config['blacklist']
+        
+        for player in player_list:
+            steam_id = player['steam_id']
+            player_name = player['name']
+            
+            if steam_id in blacklist:
+                print(f"Kicking blacklisted player: {player_name} ({steam_id})")
+                try:
+                    # Palworld uses KickPlayer <steam_id>
+                    await rcon.send_command(f"KickPlayer {steam_id}")
+                    
+                    # Notify the Palworld channel
+                    embed = Embed(
+                        title="🔨 Blacklisted Player Kicked",
+                        description=f"Player **{player_name}** (`{steam_id}`) attempted to join and was automatically kicked.",
+                        colour=Colour.orange(),
+                        timestamp=datetime.utcnow()
+                    )
+                    await pal_channel.send(embed=embed)
+                except Exception as e:
+                    print(f"Error kicking blacklisted player {steam_id}: {e}")
+        
+        # Close RCON connection after monitoring
+        await rcon.close() 
+
+# --- ASA TASKS ---
+
+@tasks.loop(minutes=ASA_SAVE_INTERVAL)
+async def asa_auto_save():
+    """Automatically saves the ASA server world."""
+    await bot.wait_until_ready()
+    
+    config = GAMES['asa']
+    asa_channel = await get_channel(config['channel_id'])
+    if not asa_channel: return
+
+    rcon, _, _ = await check_rcon_status('asa')
+    if rcon:
+        try:
+            # Notify before save
+            await asa_channel.send("💾 **ASA:** Starting automatic world save...")
+            # ASA uses 'SaveWorld' for manual save
+            await rcon.send_command("SaveWorld") 
+            await rcon.close()
+            await asa_channel.send("✅ **ASA:** World save complete.")
+        except Exception as e:
+            await asa_channel.send(f"❌ **ASA Save Failed:** An RCON error occurred during save: `{e}`")
+        finally:
+            if rcon.is_connected:
+                await rcon.close()
+
+# --- STATUS MONITOR ---
+
+@tasks.loop(minutes=2) # Check status every 2 minutes
+async def status_monitor():
+    """Monitors the status of all game servers and updates the channel status."""
+    
+    for game_id, config in GAMES.items():
+        # Skip if channel is not configured
+        game_channel = await get_channel(config['channel_id'])
+        if not game_channel:
+            continue
+
+        # Note: We discard player_list here as it's only needed for blacklist monitor
+        rcon, players_online, _ = await check_rcon_status(game_id) 
+        current_status = 'online' if players_online > 0 or rcon else 'offline'
+        
+        if players_online == -1: # RCON error, treat as online but problematic
+             status_text = f"⚠️ RCON Error ({config['name']})"
+             current_status = 'error'
+        elif current_status == 'online':
+             status_text = f"✅ Online ({players_online} players)"
+        else:
+             status_text = "❌ Offline"
+        
+        # --- Notification Logic ---
+        if config['last_status'] is not None and config['last_status'] != current_status:
+            # Server status changed (e.g., went from 'online' to 'offline')
+            embed = Embed(
+                title=f"🚨 {config['name']} Server Status Change",
+                description=f"Server is now **{current_status.upper()}**.",
+                colour=Colour.green() if current_status == 'online' else Colour.red(),
+                timestamp=datetime.utcnow()
+            )
+            await game_channel.send(f"**{config['name']} Server Status Update:**", embed=embed)
+        
+        # Update internal status
+        config['last_status'] = current_status
+        
+        # Update Discord Channel Topic for quick view
+        new_topic = game_channel.topic or ""
+        
+        if config['last_status'] == 'online':
+            topic_status = f"✅ Online ({players_online})"
+        elif config['last_status'] == 'error':
+             topic_status = f"⚠️ RCON Error"
+        else:
+            topic_status = "❌ Offline"
+
+        # Regex to find and replace the status for this specific game in the topic
+        status_pattern = rf"\[{config['name']}:.*?\]"
+        new_status_text = f"[{config['name']}: {topic_status}]"
+        
+        if re.search(status_pattern, new_topic):
+            updated_topic = re.sub(status_pattern, new_status_text, new_topic)
+        else:
+            # If it doesn't exist, append it
+            updated_topic = (new_topic + " | " + new_status_text).strip(' | ')
+            
+        try:
+            await game_channel.edit(topic=updated_topic)
+        except Exception as e:
+            print(f"Failed to update {config['name']} channel topic: {e}")
+
+
+# ==============================================================================
+# DISCORD COMMANDS
+# ==============================================================================
+
+# --- GENERAL COMMANDS ---
+
+@bot.command(name='status')
+async def status_command(ctx):
+    """Checks and reports the status and player count of all servers."""
+    statuses = []
+    
+    for game_id, config in GAMES.items():
+        # Note: We discard player_list here as it's only needed for blacklist monitor
+        rcon, players_online, _ = await check_rcon_status(game_id) 
+        
+        if players_online == -1:
+            status_text = f"**{config['name']}:** ⚠️ RCON Error (Check password/host)"
+        elif players_online > 0:
+            status_text = f"**{config['name']}:** ✅ Online ({players_online} players)"
+        else:
+            status_text = f"**{config['name']}:** ❌ Offline"
+            
+        statuses.append(status_text)
+    
+    embed = Embed(
+        title="🌍 Multi-Server Status Report",
+        description='\n'.join(statuses),
+        colour=Colour.blue(),
+        timestamp=datetime.utcnow()
+    )
+    await ctx.send(embed=embed)
+
+
+# --- ADMIN RCON COMMANDS ---
+
+# Enforcement: All commands below must be run in the ADMIN_CHANNEL_ID
+# They also require Discord Administrator permission.
+
+# Say/Broadcast Commands (Unchanged)
+@bot.command(name='say_mc')
+@commands.has_permissions(administrator=True)
+@commands.check(is_admin_channel())
+async def say_mc(ctx, *, message: str):
+    """Sends a message to all players on the Minecraft server."""
+    rcon, _, _ = await check_rcon_status('mc')
+    if not rcon:
+        return await ctx.send("❌ Minecraft Server is currently unreachable via RCON.")
+    
+    try:
+        response = await rcon.send_command(f"say [Server]: {message}")
+        await rcon.close()
+        await ctx.send(f"📢 **Minecraft:** Message broadcasted: `{message}`")
+    except Exception as e:
+        await ctx.send(f"❌ RCON error: `{e}`")
+
+@bot.command(name='say_pal')
+@commands.has_permissions(administrator=True)
+@commands.check(is_admin_channel())
+async def say_pal(ctx, *, message: str):
+    """Sends a message to all players on the Palworld server."""
+    rcon, _, _ = await check_rcon_status('pal')
+    if not rcon:
+        return await ctx.send("❌ Palworld Server is currently unreachable via RCON.")
+    
+    try:
+        response = await rcon.send_command(f"Broadcast {message}")
+        await rcon.close()
+        await ctx.send(f"📢 **Palworld:** Message broadcasted: `{message}`")
+    except Exception as e:
+        await ctx.send(f"❌ RCON error: `{e}`")
+
+@bot.command(name='say_asa')
+@commands.has_permissions(administrator=True)
+@commands.check(is_admin_channel())
+async def say_asa(ctx, *, message: str):
+    """Broadcasts a message on the ASA server."""
+    rcon, _, _ = await check_rcon_status('asa')
+    if not rcon:
+        return await ctx.send("❌ ASA Server is currently unreachable via RCON.")
+    
+    try:
+        response = await rcon.send_command(f"Broadcast {message}")
+        await rcon.close()
+        await ctx.send(f"📢 **ASA:** Message broadcasted: `{message}`")
+    except Exception as e:
+        await ctx.send(f"❌ RCON error: `{e}`")
+
+
+# Server Action Commands (Unchanged for MC/ASA)
+@bot.command(name='save_pal')
+@commands.has_permissions(administrator=True)
+@commands.check(is_admin_channel())
+async def save_pal(ctx):
+    """Manually triggers a world save on the Palworld server."""
+    rcon, _, _ = await check_rcon_status('pal')
+    if not rcon:
+        return await ctx.send("❌ Palworld Server is currently unreachable via RCON.")
+    
+    try:
+        await ctx.send("💾 **Palworld:** Manually starting world save...")
+        response = await rcon.send_command("Save")
+        await rcon.close()
+        await ctx.send("✅ **Palworld:** Manual world save complete.")
+    except Exception as e:
+        await ctx.send(f"❌ RCON error: `{e}`")
+
+@bot.command(name='save_asa')
+@commands.has_permissions(administrator=True)
+@commands.check(is_admin_channel())
+async def save_asa(ctx):
+    """Manually triggers a world save on the ASA server."""
+    rcon, _, _ = await check_rcon_status('asa')
+    if not rcon:
+        return await ctx.send("❌ ASA Server is currently unreachable via RCON.")
+    
+    try:
+        await ctx.send("💾 **ASA:** Manually starting world save...")
+        response = await rcon.send_command("SaveWorld")
+        await rcon.close()
+        await ctx.send("✅ **ASA:** Manual world save complete.")
+    except Exception as e:
+        await ctx.send(f"❌ RCON error: `{e}`")
+        
+@bot.command(name='shutdown_pal')
+@commands.has_permissions(administrator=True)
+@commands.check(is_admin_channel())
+async def shutdown_pal(ctx, delay: int = 60, *, message: str = "Server restarting for maintenance!"):
+    """Shuts down Palworld server with a countdown and message (default 60s)."""
+    rcon, _, _ = await check_rcon_status('pal')
+    if not rcon:
+        return await ctx.send("❌ Palworld Server is currently unreachable via RCON.")
+
+    try:
+        command = f"Shutdown {delay} {message}"
+        response = await rcon.send_command(command)
+        await rcon.close()
+        await ctx.send(f"🛑 **Palworld:** Shutdown command sent. Server shutting down in **{delay}** seconds with message: `{message}`")
+    except Exception as e:
+        await ctx.send(f"❌ RCON error: `{e}`")
+
+@bot.command(name='shutdown_asa')
+@commands.has_permissions(administrator=True)
+@commands.check(is_admin_channel())
+async def shutdown_asa(ctx):
+    """Immediately shuts down the ASA server (using DoExit)."""
+    rcon, _, _ = await check_rcon_status('asa')
+    if not rcon:
+        return await ctx.send("❌ ASA Server is currently unreachable via RCON.")
+
+    try:
+        await ctx.send("⚠️ **ASA:** Sending immediate `DoExit` command. Server will shut down NOW.")
+        response = await rcon.send_command("DoExit")
+        await rcon.close()
+        await ctx.send("🛑 **ASA:** `DoExit` command sent. Server process should be terminated.")
+    except Exception as e:
+        await ctx.send(f"❌ RCON error: `{e}`")
+
+@bot.command(name='reload_asa_config')
+@commands.has_permissions(administrator=True)
+@commands.check(is_admin_channel())
+async def reload_asa_config(ctx):
+    """Reloads the ASA server config (GameUserSettings.ini)."""
+    rcon, _, _ = await check_rcon_status('asa')
+    if not rcon:
+        return await ctx.send("❌ ASA Server is currently unreachable via RCON.")
+
+    try:
+        await ctx.send("⚙️ **ASA:** Sending `ReloadGameUserSettings` command...")
+        response = await rcon.send_command("ReloadGameUserSettings")
+        await rcon.close()
+        await ctx.send("✅ **ASA:** Configuration reload command sent. Check server logs for success.")
+    except Exception as e:
+        await ctx.send(f"❌ RCON error: `{e}`")
+
+
+# Banning Commands (Updated Palworld Commands)
+
+@bot.command(name='ban_mc')
+@commands.has_permissions(administrator=True)
+@commands.check(is_admin_channel())
+async def ban_mc(ctx, player_name: str):
+    """Bans a player by name from the Minecraft server."""
+    rcon, _, _ = await check_rcon_status('mc')
+    if not rcon:
+        return await ctx.send("❌ Minecraft Server is currently unreachable via RCON.")
+    
+    try:
+        response = await rcon.send_command(f"ban {player_name}")
+        await rcon.close()
+        await ctx.send(f"🔨 Player **{player_name}** banned from Minecraft.")
+    except Exception as e:
+        await ctx.send(f"❌ RCON error: `{e}`")
+
+@bot.command(name='ban_pal')
+@commands.has_permissions(administrator=True)
+@commands.check(is_admin_channel())
+async def ban_pal(ctx, steam_id: str):
+    """Kicks a player by Steam ID from Palworld and adds them to the persistent blacklist."""
+    
+    config = GAMES['pal']
+    blacklist = config['blacklist']
+    
+    # 1. Add to blacklist
+    if steam_id in blacklist:
+        return await ctx.send(f"⚠️ Steam ID **{steam_id}** is already on the Palworld blacklist.")
+        
+    blacklist.add(steam_id)
+    save_blacklist(blacklist)
+    
+    # 2. Kick the player if they are currently online
+    rcon, _, _ = await check_rcon_status('pal')
+    kicked = False
+    
+    if rcon:
+        try:
+            # Palworld RCON only supports KickPlayer
+            await rcon.send_command(f"KickPlayer {steam_id}")
+            kicked = True
+            await rcon.close()
+        except Exception as e:
+            # This is non-fatal; the blacklist operation succeeded.
+            await ctx.send(f"⚠️ Blacklist successful, but failed to kick player (RCON error): `{e}`")
+            if rcon.is_connected: await rcon.close()
+    
+    kick_message = " (and was kicked successfully)" if kicked else " (Player was offline, will be auto-kicked on next attempt to join)"
+    
+    await ctx.send(f"🔨 Steam ID **{steam_id}** added to Palworld blacklist{kick_message}. They will be automatically kicked by the bot if they attempt to join.")
+
+@bot.command(name='unban_pal')
+@commands.has_permissions(administrator=True)
+@commands.check(is_admin_channel())
+async def unban_pal(ctx, steam_id: str):
+    """Removes a Steam ID from the Palworld persistent blacklist."""
+    
+    config = GAMES['pal']
+    blacklist = config['blacklist']
+    
+    if steam_id not in blacklist:
+        return await ctx.send(f"⚠️ Steam ID **{steam_id}** is not currently on the Palworld blacklist.")
+        
+    blacklist.remove(steam_id)
+    save_blacklist(blacklist)
+    
+    await ctx.send(f"✅ Steam ID **{steam_id}** removed from Palworld blacklist. They can now join the server.")
+
+
+@bot.command(name='ban_asa')
+@commands.has_permissions(administrator=True)
+@commands.check(is_admin_channel())
+async def ban_asa(ctx, identifier: str):
+    """Bans a player by Steam ID or name from the ASA server (ASA usually requires Steam ID)."""
+    rcon, _, _ = await check_rcon_status('asa')
+    if not rcon:
+        return await ctx.send("❌ ASA Server is currently unreachable via RCON.")
+
+    try:
+        command = f"BanPlayer {identifier}" 
+        response = await rcon.send_command(command)
+        await rcon.close()
+        
+        if "successfully" in response.lower() or "banned" in response.lower():
+             await ctx.send(f"🔨 Player **{identifier}** banned from ASA. (Response: {response})")
+        else:
+             await ctx.send(f"🔨 Player **{identifier}** banned from ASA.")
+    except Exception as e:
+        await ctx.send(f"❌ RCON error: `{e}`")
+
+
+# ==============================================================================
+# ERROR HANDLING
+# ==============================================================================
+
+@bot.event
+async def on_command_error(ctx, error):
+    """Global command error handler."""
+    
+    # Ignore command not found errors to avoid spamming the channel
+    if isinstance(error, commands.CommandNotFound):
+        return
+    
+    # Permissions error (for Discord Admin check)
+    if isinstance(error, commands.MissingPermissions):
+        await ctx.send(f"❌ **Permission Denied!** You need **Administrator** permissions to use this command.")
+        return
+        
+    # Check failure (for Admin Channel check) - the check function handles the message, so we just return here
+    if isinstance(error, commands.CheckFailure):
+        return
+
+    # Handle generic/unhandled errors
+    error_message = f"Unhandled command error in {ctx.command}: {error}"
+    print(error_message)
+    # Also send a private message to the admin channel for severe errors
+    await send_to_admin(f"❌ An unhandled error occurred while running `{ctx.command}` by {ctx.author.display_name}: ```{error}```")
+    await ctx.send(f"❌ An internal error occurred while running the command: `{error}`")
+    
+# ==============================================================================
+# BOT RUN
+# ==============================================================================
+
+# Ensure the token is set before running
+if DISCORD_TOKEN != "YOUR_DISCORD_BOT_TOKEN_HERE" and DISCORD_TOKEN:
+    # Run the bot
+    try:
+        # Run the bot with the specified token
+        bot.run(DISCORD_TOKEN)
+    except Exception as e:
+        print(f"Failed to run the bot. Check your DISCORD_TOKEN and permissions. Error: {e}")
+else:
+    print("FATAL: DISCORD_TOKEN is missing or set to the default placeholder. Please configure it.")

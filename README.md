@@ -1,103 +1,104 @@
-# **🎮 Multi-Game Dedicated Server Monitor Bot (4 Servers)**
+# **🎮 Multi-Game Dedicated Server Monitor & RCON Bot**
 
-This Python-based Discord bot provides unified monitoring and administrative control for up to four game servers: **Minecraft**, **Palworld**, **ARK: Survival Ascended (ASA)**, and a **Generic SRCDS (Source Engine) Game**. It uses the RCON (Remote Console) protocol for real-time interaction.
+This is a powerful Discord bot built with discord.py designed to manage and monitor multiple dedicated game servers—specifically **Minecraft**, **Palworld**, and **ARK: Survival Ascended (ASA)**—using RCON (Remote Console).
+
+The bot provides real-time status updates, scheduled automatic backups, and administrator tools directly accessible via Discord commands.
 
 ## **✨ Features**
 
-* **Unified Monitoring (4 Games):** Manages RCON connections and monitors player status for all four game types simultaneously from a single bot process.  
-* **Real-Time Player Tracking:** Reports player joins and leaves directly to a specified Discord channel.  
-* **Persistent Player Stats:** Tracks and records each player's **First Join** date and **Total Playtime** using a local player\_stats.json file.  
-* **Scheduled Maintenance:** Runs automatic hourly commands to force a world save/perform maintenance for all four servers.  
-* **RCON Health Checks:** Continuously verifies the RCON connection status.  
-* **Administrative Commands:** Allows Discord users with the **Administrator** role to execute server-side commands across all monitored games.
+* **Multi-Game Support:** Unified management for Minecraft, Palworld, and ASA.  
+* **Real-time Status Monitoring:** Automatically checks and reports the online/offline status of all configured servers.  
+* **Scheduled Actions:** Automated **Palworld** and **ASA** world-saving loops to ensure data integrity.  
+* **RCON Command Execution:** Send in-game chat messages and execute ban commands across all supported servers.  
+* **Discord Integration:** Sends essential logs (status changes, errors) to designated Discord channels.  
+* **Permission Control:** All administrative commands require the Discord user to have **Administrator** permissions.
 
-## **🛠️ Setup and Installation**
+## **🛠️ Prerequisites**
 
-### **Prerequisites**
+Before running the bot, you must have the following set up:
 
-1. **Python:** Python 3.8+ installed on your host machine.  
-2. **Discord Bot Token:** A Discord application bot token.  
-3. **Discord Channel IDs:** The ID of the primary announcement channel and a private log channel.  
-4. **RCON Enabled:** Ensure RCON is enabled and configured correctly on all dedicated servers you plan to use.
+1. **Python 3.8+** installed.  
+2. A **Discord Bot Token** and a Discord server where the bot has appropriate permissions (including the ability to read messages and send embeds).  
+3. **RCON enabled and configured** on each of your dedicated game servers:  
+   * **Minecraft:** Requires a server with RCON enabled (e.g., Paper, Spigot, Vanilla with RCON enabled).  
+   * **Palworld:** Requires RCON configuration in DefaultPalWorldSettings.ini or similar.  
+   * **ASA:** Requires RCON configuration in your server's command line or GameUserSettings.ini.
 
-### **Dependencies**
+## **⚙️ Installation & Setup**
 
-This project requires two external Python libraries: discord.py and python-rcon.
+### **1\. Dependencies**
 
-pip install discord.py python-rcon
+Install the required Python packages using pip:
 
-## **⚙️ Configuration**
+pip install \-r requirements.txt
 
-All configuration is handled in the top section of the multi\_game\_monitor.py file, or preferably, via **environment variables**.
+*(Note: The primary external libraries needed are discord.py (specifically discord.ext.commands) and rcon-asyncio.)*
+
+### **2\. Configuration (Environment Variables)**
+
+The bot is configured primarily using environment variables for security. You can set these in a shell or use a .env file (if you are using a tool that supports it).
 
 | Variable | Description | Example Value |
 | :---- | :---- | :---- |
-| DISCORD\_TOKEN | Your Discord bot token. | Njk2NzE4.B31E92.zN8-p-h-Z\_E1O1S |
-| TARGET\_CHANNEL\_ID | The Discord channel ID for join/leave notifications. | 123456789012345678 |
-| LOG\_CHANNEL\_ID | The Discord channel ID for admin/error logging. | 123456789012345678 |
-| MC\_RCON\_HOST | Minecraft server IP or hostname. | 127.0.0.1 |
-| MC\_RCON\_PORT | Minecraft RCON port. | 25575 |
-| MC\_RCON\_PASSWORD | Minecraft RCON password. | my-secret-mc-pass |
-| PAL\_RCON\_HOST | Palworld server IP or hostname. | 127.0.0.1 |
-| PAL\_RCON\_PORT | Palworld RCON port. | 25576 |
-| PAL\_RCON\_PASSWORD | Palworld RCON password. | my-secret-pal-pass |
-| ASA\_RCON\_HOST | ASA server IP or hostname. | 127.0.0.1 |
-| ASA\_RCON\_PORT | ASA RCON port (often 27020). | 27020 |
-| ASA\_RCON\_PASSWORD | ASA RCON password. | my-secret-asa-pass |
-| **SRCDS\_RCON\_HOST** | **Generic Steam (SRCDS) IP/hostname.** | 127.0.0.1 |
-| **SRCDS\_RCON\_PORT** | **Generic Steam (SRCDS) RCON port.** | 27015 |
-| **SRCDS\_RCON\_PASSWORD** | **Generic Steam (SRCDS) password.** | my-secret-srcds-pass |
+| DISCORD\_TOKEN | **Mandatory.** Your Discord Bot Token. | NzQ3NjY4Mzk0NzgwODcwMjY3.X8n9\_A.L32qE... |
+| TARGET\_CHANNEL\_ID | **Mandatory.** The Discord channel ID for status reports and logs. | 123456789012345678 |
+| LOG\_CHANNEL\_ID | **Optional.** Channel ID for more verbose admin/error logs (defaults to TARGET\_CHANNEL\_ID). | 987654321098765432 |
+| MC\_RCON\_HOST | Minecraft RCON IP address. | 127.0.0.1 |
+| MC\_RCON\_PORT | Minecraft RCON Port. | 25575 |
+| MC\_RCON\_PASSWORD | Minecraft RCON Password. | mc-secret-pw |
+| PAL\_RCON\_HOST | Palworld RCON IP address. | 127.0.0.1 |
+| PAL\_RCON\_PORT | Palworld RCON Port. | 25576 |
+| PAL\_RCON\_PASSWORD | Palworld RCON Password. | pal-secret-pw |
+| ASA\_RCON\_HOST | ASA RCON IP address. | 127.0.0.1 |
+| ASA\_RCON\_PORT | ASA RCON Port. | 25577 |
+| ASA\_RCON\_PASSWORD | ASA RCON Password. | asa-secret-pw |
+| ASA\_SAVE\_INTERVAL | ASA Auto-save interval in minutes. | 60 (Default) |
+| PAL\_SAVE\_INTERVAL | Palworld Auto-save interval in minutes. | 30 (Default) |
 
-💡 **Note on SRCDS:** The **SRCDS** commands are set up for games using the standard Source Engine RCON protocol (like CS:GO, TF2, Garry's Mod). For other Steam games (like Rust or Valheim), you might need to adjust the list\_command and player\_name\_extractor functions slightly to match that game's specific RCON output format.
+### **3\. Running the Bot**
 
-### **Running the Bot**
+Once the configuration is complete, run the Python script:
 
-Once the configuration is set and dependencies are installed, run the script:
+python Multi-Game Dedicated Monitor Bot.py
 
-python multi\_game\_monitor.py
+## **🚀 Discord Commands**
 
-## **🖥️ Command Reference**
+All RCON commands listed below require the user to have the **Administrator** permission role in the Discord server.
 
-All commands start with the prefix \!server-. All administrative commands require the Discord user to have the **Administrator** permission.
+### **Server Status**
 
-### **⚙️ Generic SRCDS Commands (\!server-srcds-)**
+| Command | Description |
+| :---- | :---- |
+| \!status | Checks the connection and current player count for all configured game servers. |
 
-| Command | Arguments | Description |
-| :---- | :---- | :---- |
-| \!server-srcds-status | None | Checks RCON health and current player count. |
-| \!server-srcds-players | None | Lists online players, session time, and total playtime. |
-| \!server-srcds-say | \<message\> | Sends a message to the in-game chat, prefixed by \[Discord Admin\]. |
-| \!server-srcds-kick | \<Name\> | Kicks a player using their exact in-game **Name**. |
+### **RCON Messaging**
 
-### **🦖 ASA Commands (\!server-asa-)**
+| Command | Server | Usage | Description |
+| :---- | :---- | :---- | :---- |
+| \!say\_mc | Minecraft | \!say\_mc \<message\> | Sends a message to all players on the Minecraft server. |
+| \!say\_pal | Palworld | \!say\_pal \<message\> | Sends a message to all players on the Palworld server. |
+| \!say\_asa | ASA | \!say\_asa \<message\> | Broadcasts a message on the ARK server. |
 
-| Command | Arguments | Description |
-| :---- | :---- | :---- |
-| \!server-asa-status | None | Checks RCON health and current player count. |
-| \!server-asa-players | None | Lists online players, session time, and total playtime. **(Provides Player ID for kicks)** |
-| \!server-asa-broadcast | \<message\> | Sends a server-wide broadcast message to all players. |
-| \!server-asa-save | None | Forces the world to save (SaveWorld). |
-| \!server-asa-kick | \<PlayerID\> | Kicks a player using their in-game **Player ID**. |
+### **Player Management (Banning)**
 
-### **🎮 Palworld Commands (\!server-pal-)**
+| Command | Server | Usage | Description |
+| :---- | :---- | :---- | :---- |
+| \!ban\_mc | Minecraft | \!ban\_mc \<player\_name\> | Bans a player by name from the Minecraft server. |
+| \!ban\_pal | Palworld | \!ban\_pal \<steam\_id\> | Bans a player by their Steam ID from the Palworld server. |
+| \!ban\_asa | ASA | \!ban\_asa \<steam\_id\_or\_name\> | Bans a player by Steam ID or name from the ASA server. |
 
-| Command | Arguments | Description |
-| :---- | :---- | :---- |
-| \!server-pal-status | None | Checks RCON health and current player count. |
-| \!server-pal-players | None | Lists online players, session time, and total playtime. |
-| \!server-pal-broadcast | \<message\> | Sends a server-wide broadcast message to all players. |
-| \!server-pal-save | None | Forces the server to immediately save the world state (Save). |
-| \!server-pal-kick | \<SteamID\> | Kicks a player using their **SteamID** (not name). |
-| \!server-pal-shutdown | \<seconds\> \<message\> | Initiates server shutdown after a delay with a broadcast. |
+### **Server Actions**
 
-### **🧱 Minecraft Commands (\!server-mine-)**
+| Command | Server | Usage | Description |
+| :---- | :---- | :---- | :---- |
+| \!save\_pal | Palworld | \!save\_pal | Manually triggers a world save on the Palworld server. |
+| \!save\_asa | ASA | \!save\_asa | Manually triggers a world save on the ASA server. |
+| \!shutdown\_pal | Palworld | \!shutdown\_pal \<delay\_seconds\> \<message\> | Shuts down the Palworld server after a delay (e.g., \!shutdown\_pal 60 Server restarting). |
+| \!shutdown\_asa | ASA | \!shutdown\_asa | **Warning:** This command is configured to send the RCON DoExit command, which immediately shuts down the ASA server. |
+| \!reload\_asa\_config | ASA | \!reload\_asa\_config | Reloads the configuration files for the ASA server. |
 
-| Command | Arguments | Description |
-| :---- | :---- | :---- |
-| \!server-mine-status | None | Checks RCON health and current player count. |
-| \!server-mine-players | None | Lists online players, session time, and total playtime. |
-| \!server-mine-say | \<message\> | Sends a message to the in-game chat, prefixed by \[Discord Admin\]. |
-| \!server-mine-save | None | Forces the world to save (save-all). |
-| \!server-mine-kick | \<Name\> | Kicks a player using their exact in-game name. |
-| \!server-mine-ban | \<Name\> | Bans a player using their exact in-game name. |
+## **📝 Troubleshooting**
 
+* **Fatal Error: DISCORD\_TOKEN Missing:** Ensure the DISCORD\_TOKEN environment variable is set correctly and is not the default placeholder.  
+* **Permission Denied:** If commands fail with "Permission Denied\!", ensure the bot's Discord role has the **Administrator** permission enabled.  
+* **RCON Connection Failed:** Double-check the RCON host, port, and password for the specific game in your configuration. Verify that the RCON service is running and accessible on the server's firewall.

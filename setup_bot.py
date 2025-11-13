@@ -1,116 +1,111 @@
 import os
 import subprocess
 import sys
-from textwrap import dedent
 
-# --- Configuration for Installer ---
-DOTENV_PATH = '.env'
-REQUIREMENTS_PATH = 'requirements.txt'
-BOT_FILE_NAME = 'Multi-Game Dedicated Monitor Bot.py'
+# --- Configuration ---
+# NOTE: This filename MUST match the renamed main script.
+BOT_FILENAME = "Multi-Game_Dedicated_Monitor_Bot.py"
+ENV_FILENAME = ".env"
+REQUIREMENTS_FILE = "requirements.txt"
 
-# Template for the .env file with essential configuration placeholders
-ENV_TEMPLATE = dedent(f"""\
-    # ======================================================================================================
-    # REQUIRED CONFIGURATION FOR DISCORD BOT
-    # 
-    # 1. DISCORD_TOKEN: Get this from the Discord Developer Portal for your bot.
-    # 2. ADMIN_CHANNEL_ID: The ID of the Discord channel where RCON commands must be executed (e.g., !ban_pal).
-    # 3. Game Channel IDs: The channel IDs where status messages and logs for each game will be posted.
-    # 
-    # NOTE: You MUST replace all placeholder values (e.g., 'YOUR_DISCORD_TOKEN_HERE') with your actual credentials.
-    # ======================================================================================================
+# Default configuration for the .env file
+DEFAULT_ENV_CONTENT = f"""# --- Environment Variables for {BOT_FILENAME} ---
 
-    DISCORD_TOKEN="YOUR_DISCORD_BOT_TOKEN_HERE"
-    ADMIN_CHANNEL_ID=000000000000000000  # REPLACE with the ID of your Admin/RCON command channel.
+# 1. DISCORD CONFIGURATION (MANDATORY)
+DISCORD_TOKEN="YOUR_DISCORD_BOT_TOKEN_HERE"
+ADMIN_CHANNEL_ID=000000000000000000  # Channel where RCON commands are allowed
+MC_CHANNEL_ID=000000000000000000     # Channel for Minecraft status
+PAL_CHANNEL_ID=000000000000000000     # Channel for Palworld status and auto-save logs
+ASA_CHANNEL_ID=000000000000000000     # Channel for ARK: ASA status and auto-save logs
 
-    # --- GAME SPECIFIC CHANNEL IDs ---
-    MC_CHANNEL_ID=000000000000000001    # REPLACE with the ID for Minecraft logs
-    PAL_CHANNEL_ID=000000000000000002   # REPLACE with the ID for Palworld logs
-    ASA_CHANNEL_ID=000000000000000003   # REPLACE with the ID for ARK: ASA logs
+# 2. MINECRAFT RCON CONFIGURATION
+MC_RCON_HOST="127.0.0.1"
+MC_RCON_PORT=25575
+MC_RCON_PASSWORD="YOUR_MC_RCON_PASSWORD_HERE"
 
-    # ======================================================================================================
-    # RCON CONFIGURATION
-    # Ensure RCON is enabled and correctly configured on your game servers.
-    # ======================================================================================================
+# 3. PALWORLD RCON CONFIGURATION
+PAL_RCON_HOST="127.0.0.1"
+PAL_RCON_PORT=25576
+PAL_RCON_PASSWORD="YOUR_PAL_RCON_PASSWORD_HERE"
+PAL_SAVE_INTERVAL=30 # Auto-save interval in minutes
 
-    # --- MINECRAFT RCON ---
-    MC_RCON_HOST="127.0.0.1"
-    MC_RCON_PORT=25575
-    MC_RCON_PASSWORD="YOUR_MC_RCON_PASSWORD_HERE"
-
-    # --- PALWORLD RCON ---
-    PAL_RCON_HOST="127.0.0.1"
-    PAL_RCON_PORT=25576
-    PAL_RCON_PASSWORD="YOUR_PAL_RCON_PASSWORD_HERE"
-    PAL_SAVE_INTERVAL=30 # Auto-save interval in minutes
-
-    # --- ARK: ASA RCON ---
-    ASA_RCON_HOST="127.0.0.1"
-    ASA_RCON_PORT=25577
-    ASA_RCON_PASSWORD="YOUR_ASA_RCON_PASSWORD_HERE"
-    ASA_SAVE_INTERVAL=60 # Auto-save interval in minutes
-""")
-
-
-def check_python_version():
-    """Checks if the required Python version (3.8+) is running."""
-    if sys.version_info < (3, 8):
-        print("❌ Error: Python 3.8 or higher is required.")
-        print(f"You are running Python {sys.version_info.major}.{sys.version_info.minor}.")
-        sys.exit(1)
-    print(f"✅ Python {sys.version_info.major}.{sys.version_info.minor} detected.")
+# 4. ASA RCON CONFIGURATION
+ASA_RCON_HOST="127.0.0.1"
+ASA_RCON_PORT=27020
+ASA_RCON_PASSWORD="YOUR_ASA_RCON_PASSWORD_HERE"
+ASA_SAVE_INTERVAL=60 # Auto-save interval in minutes
+"""
 
 def install_dependencies():
-    """Installs required Python packages using pip."""
-    print(f"\n⚙️ Installing dependencies from {REQUIREMENTS_PATH}...")
+    """Installs required packages using pip."""
+    print("--- 1. Installing Python Dependencies ---")
     try:
-        # Use subprocess to run pip install
-        subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-r', REQUIREMENTS_PATH])
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", REQUIREMENTS_FILE])
         print("✅ Dependencies installed successfully.")
+        return True
     except subprocess.CalledProcessError as e:
-        print(f"❌ Error during dependency installation. Check your internet connection and pip setup. Error: {e}")
-        sys.exit(1)
+        print(f"❌ Error during dependency installation: {e}")
+        return False
     except FileNotFoundError:
-        print(f"❌ Error: Could not find '{REQUIREMENTS_PATH}'. Ensure the file exists.")
-        sys.exit(1)
+        print(f"❌ Error: {REQUIREMENTS_FILE} not found. Please ensure it is in the same directory.")
+        return False
 
 def create_env_file():
-    """Creates the .env configuration file."""
-    if os.path.exists(DOTENV_PATH):
-        print(f"⚠️ '{DOTENV_PATH}' already exists. Skipping creation.")
-        return
-    
+    """Creates the .env file if it doesn't exist."""
+    print(f"\n--- 2. Checking for Configuration File ({ENV_FILENAME}) ---")
+    if os.path.exists(ENV_FILENAME):
+        print(f"✅ {ENV_FILENAME} already exists. Skipping creation.")
+        print("   Please ensure all placeholder values are updated inside the file.")
+    else:
+        with open(ENV_FILENAME, 'w') as f:
+            f.write(DEFAULT_ENV_CONTENT)
+        print(f"✅ {ENV_FILENAME} created successfully.")
+        print("⚠️ ACTION REQUIRED: You must open the .env file and replace all 'YOUR_..._HERE' and '0000...' placeholders.")
+
+def create_runner_scripts():
+    """Creates basic start scripts for convenience."""
+    print("\n--- 3. Creating Runner Scripts ---")
+
+    # Windows Batch File
+    bat_content = f"""@echo off
+echo Starting the Multi-Game Dedicated Monitor Bot...
+python "{BOT_FILENAME}"
+echo Bot stopped or crashed. Press any key to close.
+pause
+"""
+    with open("start_bot.bat", 'w') as f:
+        f.write(bat_content)
+    print("✅ Created start_bot.bat (Windows)")
+
+    # Unix Shell Script
+    sh_content = f"""#!/bin/bash
+echo "Starting the Multi-Game Dedicated Monitor Bot..."
+python3 "{BOT_FILENAME}"
+echo "Bot stopped or crashed."
+"""
+    with open("start_bot.sh", 'w') as f:
+        f.write(sh_content)
+
     try:
-        with open(DOTENV_PATH, 'w') as f:
-            f.write(ENV_TEMPLATE)
-        print(f"✅ Created configuration file: '{DOTENV_PATH}'")
-        print("   -> Please open this file and fill in all the placeholder values!")
-    except IOError as e:
-        print(f"❌ Error writing '{DOTENV_PATH}'. Check permissions. Error: {e}")
-        sys.exit(1)
+        os.chmod("start_bot.sh", 0o755)
+        print("✅ Created and set executable permission for start_bot.sh (Linux/macOS)")
+    except Exception:
+        print("✅ Created start_bot.sh (Linux/macOS - NOTE: You may need to run 'chmod +x start_bot.sh' manually.)")
 
 def main():
-    print("==============================================")
-    print("🤖 Multi-Game RCON Bot Setup Wizard")
-    print("==============================================")
+    print(f"\n=======================================================")
+    print(f"   {BOT_FILENAME} Setup Script")
+    print(f"=======================================================\n")
     
-    check_python_version()
+    if install_dependencies():
+        create_env_file()
+        create_runner_scripts()
     
-    if not os.path.exists(REQUIREMENTS_PATH):
-        print(f"❌ FATAL: '{REQUIREMENTS_PATH}' not found. Please ensure it is in the same directory as the installer.")
-        sys.exit(1)
-
-    install_dependencies()
-    create_env_file()
-
-    print("\n==============================================")
-    print("🎉 SETUP COMPLETE! NEXT STEPS:")
-    print("==============================================")
-    print(f"1. **Edit the '.env' file** that was just created. You must fill in the Discord Token and all RCON passwords and channel IDs.")
-    print(f"2. To run the bot, use either `python {BOT_FILE_NAME}` or the provided run scripts:")
-    print("   - Windows: Double-click `start_bot.bat`")
-    print("   - Linux/macOS: Run `./start_bot.sh` (you may need to run `chmod +x start_bot.sh` first)")
-    print("==============================================")
+    print(f"\n=======================================================")
+    print("SETUP COMPLETE.")
+    print(f"1. **REQUIRED:** Edit the **{ENV_FILENAME}** file with your token, channel IDs, and RCON passwords.")
+    print("2. Run the bot using **start_bot.sh** (Linux/macOS) or **start_bot.bat** (Windows).")
+    print("=======================================================")
 
 if __name__ == "__main__":
     main()

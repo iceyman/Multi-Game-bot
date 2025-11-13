@@ -1,0 +1,5 @@
+Dependencies for the Multi-Game Dedicated Server Monitor & RCON Bot
+
+discord.py
+python-rcon
+python-dotenv

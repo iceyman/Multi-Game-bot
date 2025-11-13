@@ -1,80 +1,88 @@
-# **Multi-Game Dedicated Server Monitor and RCON Bot**
+# **🎮 Multi-Game Dedicated Monitor Bot (Discord Python Bot)**
 
-This Python-based Discord bot provides real-time status monitoring, automated saving, and administrator Remote Console (RCON) command execution for multiple dedicated game servers, including **Minecraft**, **Palworld**, and **ARK: Survival Ascended (ASA)**.
+This Discord bot is designed to provide real-time status, administration, and automated maintenance for multiple dedicated game servers using **RCON (Remote Console)**. It currently supports **Minecraft (MC)**, **Palworld (PAL)**, and **ARK: Survival Ascended (ASA)**.
+
+The bot utilizes asynchronous RCON connections (python-rcon and discord.py) to manage game state, enforce bans, and perform critical actions like auto-saving.
 
 ## **✨ Features**
 
-* **Multi-Server Status:** Use the \!status command to get the current online status and player count for all configured servers.  
-* **Automated Backups:** Scheduled automatic world saving for Palworld and ASA (configurable interval).  
-* **Administrator RCON Commands:** Securely run server commands (e.g., \!say\_mc, \!shutdown\_pal, \!ban\_asa) from a dedicated Discord channel.  
-* **Persistent Palworld Ban List:** Automatically tracks and kicks players using a server-independent, file-based Steam ID blacklist.  
-* **Secure Configuration:** Uses a .env file to securely manage Discord tokens and RCON passwords.  
-* **Easy Setup:** Includes an installer script (setup\_bot.py) to handle dependencies and initial configuration file generation.
+* **Multi-Game Support:** Simultaneously monitor and manage Minecraft, Palworld, and ARK: ASA servers.  
+* **Auto-Saving:** Automatically runs save commands for Palworld and ASA on configurable intervals.  
+* **Server Status:** Check server online/offline status and RCON connectivity.  
+* **Player Listing:** Get a real-time list of connected players.  
+* **Powerful Admin Commands:**  
+  * **Raw RCON Execution (\!rcon\_raw):** Send any arbitrary RCON command directly to any game server.  
+  * **Player Management:** Kick, ban, and unban players across all supported games.  
+  * **Minecraft Whitelisting:** Easily add or remove players from the Minecraft whitelist.  
+* **Role/Permission Control:** All administrative commands are restricted to users with the **Administrator** role and must be run in a designated admin channel.
 
 ## **🛠️ Setup and Installation**
 
-### **Prerequisites**
+### **1\. Prerequisites**
 
-1. **Python 3.8+** (Required)  
-2. **RCON Enabled** on all target game servers (Minecraft, Palworld, ASA) with host, port, and password noted.  
-3. A **Discord Bot Token** and the ability to find your desired Discord **Channel IDs**.
+You must have **Python 3.8+** installed. You will also need RCON enabled on all your dedicated servers.
 
-### **Step 1: Run the Installer**
+### **2\. Download and Dependencies**
 
-The included setup\_bot.py script will install all necessary Python libraries and create the configuration file.
+Clone this repository or download the files. Then, run the setup script:
 
-1. Ensure you have the following files in the same directory:  
-   * Multi-Game\_Dedicated\_Monitor\_Bot.py  
-   * requirements.txt  
-   * setup\_bot.py  
-2. Open your terminal or command prompt in that directory and run:  
-   python setup\_bot.py
+\# Install required Python libraries  
+pip install \-r requirements.txt
 
-### **Step 2: Configure the Bot**
+### **3\. Configuration (.env file)**
 
-The installer created a file named **.env**. You **must** open this file and replace all placeholder values (YOUR\_...\_HERE or 0000...) with your actual information.
+The bot uses a .env file to store all sensitive configuration details. Make sure to create this file and edit it with your specific details:
 
-| Variable | Description | Example Value |
-| :---- | :---- | :---- |
-| DISCORD\_TOKEN | Your Discord bot's authentication token. | MzIwMDMwNjY1MzM2ODQ2OTc2.C8-QJg.cM5R5j2R... |
-| ADMIN\_CHANNEL\_ID | The ID of the Discord channel where RCON commands (\!say\_mc, \!ban\_pal, etc.) can be used. | 123456789012345678 |
-| MC\_CHANNEL\_ID | Channel ID for Minecraft status updates. | 123456789012345679 |
-| PAL\_CHANNEL\_ID | Channel ID for Palworld status and auto-save logs. | 123456789012345680 |
-| ASA\_CHANNEL\_ID | Channel ID for ARK: ASA status and auto-save logs. | 123456789012345681 |
-| \[GAME\]\_RCON\_HOST/PORT/PASSWORD | Host IP (usually 127.0.0.1 if on the same machine), Port, and Password for each game's RCON service. | MC\_RCON\_PORT=25575 |
-| PAL\_SAVE\_INTERVAL | Automated save interval for Palworld in **minutes** (Default: 30). | 30 |
-| ASA\_SAVE\_INTERVAL | Automated save interval for ARK: ASA in **minutes** (Default: 60). | 60 |
+\# \--- Environment Variables for Multi-Game\_Dedicated\_Monitor\_Bot.py \---
 
-### **Step 3: Run the Bot**
+\# 1\. DISCORD CONFIGURATION (MANDATORY)  
+DISCORD\_TOKEN="YOUR\_DISCORD\_BOT\_TOKEN\_HERE"  
+ADMIN\_CHANNEL\_ID=000000000000000000  \# Channel where ALL RCON commands are allowed  
+MC\_CHANNEL\_ID=000000000000000000     \# Channel for Minecraft status/logs  
+PAL\_CHANNEL\_ID=000000000000000000     \# Channel for Palworld status/auto-save logs  
+ASA\_CHANNEL\_ID=000000000000000000     \# Channel for ARK: ASA status/auto-save logs
 
-Use one of the included runner scripts to start the bot:
+\# 2\. MINECRAFT RCON CONFIGURATION  
+MC\_RCON\_HOST="127.0.0.1"  
+MC\_RCON\_PORT=25575  
+MC\_RCON\_PASSWORD="YOUR\_MC\_RCON\_PASSWORD\_HERE"
 
-| System | Command | Notes |
-| :---- | :---- | :---- |
-| **Windows** | Double-click start\_bot.bat | This script will keep the window open after execution. |
-| **Linux/macOS** | ./start\_bot.sh | You may need to run chmod \+x start\_bot.sh first to grant execution permission. |
+\# 3\. PALWORLD RCON CONFIGURATION  
+PAL\_RCON\_HOST="127.0.0.1"  
+PAL\_RCON\_PORT=25576  
+PAL\_RCON\_PASSWORD="YOUR\_PAL\_RCON\_PASSWORD\_HERE"  
+PAL\_SAVE\_INTERVAL=30 \# Auto-save interval in minutes
 
-## **🎮 Bot Commands**
+\# 4\. ASA RCON CONFIGURATION  
+ASA\_RCON\_HOST="127.0.0.1"  
+ASA\_RCON\_PORT=27020  
+ASA\_RCON\_PASSWORD="YOUR\_ASA\_RCON\_PASSWORD\_HERE"  
+ASA\_SAVE\_INTERVAL=60 \# Auto-save interval in minutes
 
-Commands are split into two categories: **Global Player Commands** (usable by anyone, in any channel) and **Administrator Commands** (requires admin permissions, restricted to ADMIN\_CHANNEL\_ID).
+### **4\. Running the Bot**
 
-### **Global Player Commands (Any User, Any Channel)**
+Start the bot using the main script:
 
-| Command | Usage | Description |
-| :---- | :---- | :---- |
-| \!status | \!status | Displays the current online status and player counts for all configured servers (Minecraft, Palworld, ASA). |
-| \!info | \!info | Displays general information and lists the available player commands. |
+python Multi-Game\_Dedicated\_Monitor\_Bot.py
 
-### **Administrator Commands (Requires Admin Permission & Designated Channel)**
+## **💻 Command Reference**
 
-| Command | Usage | Description |
-| :---- | :---- | :---- |
-| \!say\_mc | \!say\_mc Hello everyone\! | Broadcasts a message to the Minecraft server. |
-| \!ban\_mc | \!ban\_mc PlayerName | Bans a player by name on the Minecraft server. |
-| \!shutdown\_pal | \!shutdown\_pal \[delay\] \[message\] | Safely shuts down the Palworld server after a countdown (default 60s). |
-| \!save\_pal | \!save\_pal | Manually triggers an immediate world save for Palworld. |
-| \!ban\_pal | \!ban\_pal 76561198... | **Bans a player by 17-digit Steam ID.** Adds the ID to the persistent blacklist. |
-| \!unban\_pal | \!unban\_pal 76561198... | Removes a Steam ID from the persistent blacklist. |
-| \!list\_bans\_pal | \!list\_bans\_pal | Lists all Steam IDs currently on the persistent blacklist. |
-| \!ban\_asa | \!ban\_asa PlayerName | Bans a player by name or ID on the ARK: ASA server. |
+The bot uses the prefix \! for all commands.
 
+| Command | Usage | Description | Requires Admin? | Games Supported |
+| :---- | :---- | :---- | :---- | :---- |
+| \!help | \!help | Displays this command list. | No | All |
+| \!status | \!status \<game\> | Checks if the server is online and RCON is responsive. | No | All |
+| \!players | \!players \<game\> | Lists all connected players. | No | All |
+| \!save | \!save \<game\> | Forces the server to perform a manual save. | Yes | All |
+| \!broadcast | \!broadcast \<game\> \<message\> | Sends a message to all players in-game. | Yes | All |
+| **\!rcon\_raw** | **\!rcon\_raw \<game\> \<command\>** | **Sends a custom, raw RCON command.** | Yes | All |
+| \!kick | \!kick \<game\> \<ID/Name\> | Kicks a player from the server. | Yes | All |
+| \!ban | \!ban \<game\> \<ID/Name\> | Permanently bans a player from the server. | Yes | All |
+| **\!unban\_mc** | **\!unban\_mc \<player\_name\>** | **Unbans a player from Minecraft.** | Yes | MC |
+| **\!unban\_pal** | **\!unban\_pal \<steam\_id\>** | **Unbans a player from Palworld.** | Yes | PAL |
+| **\!unban\_asa** | **\!unban\_asa \<steam\_id/ID\>** | **Unbans a player from ARK: ASA.** | Yes | ASA |
+| **\!mc\_whitelist** | **\!mc\_whitelist \<player\_name\>** | **Adds a player to the MC whitelist.** | Yes | MC |
+| **\!mc\_unwhitelist** | **\!mc\_unwhitelist \<player\_name\>** | **Removes a player from the MC whitelist.** | Yes | MC |
+
+*(Game identifiers: mc, pal, asa)*

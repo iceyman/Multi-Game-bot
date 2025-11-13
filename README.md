@@ -24,7 +24,7 @@ This Python-based Discord bot provides real-time status monitoring, automated sa
 The included setup\_bot.py script will install all necessary Python libraries and create the configuration file.
 
 1. Ensure you have the following files in the same directory:  
-   * Multi-Game Dedicated Monitor Bot.py  
+   * Multi-Game\_Dedicated\_Monitor\_Bot.py  
    * requirements.txt  
    * setup\_bot.py  
 2. Open your terminal or command prompt in that directory and run:  
@@ -54,19 +54,27 @@ Use one of the included runner scripts to start the bot:
 | **Windows** | Double-click start\_bot.bat | This script will keep the window open after execution. |
 | **Linux/macOS** | ./start\_bot.sh | You may need to run chmod \+x start\_bot.sh first to grant execution permission. |
 
-## **💻 Bot Commands (Admin Channel Only)**
+## **🎮 Bot Commands**
 
-All RCON and admin commands require the user to have the **Administrator** permission in the Discord server and must be used in the channel specified by ADMIN\_CHANNEL\_ID.
+Commands are split into two categories: **Global Player Commands** (usable by anyone, in any channel) and **Administrator Commands** (requires admin permissions, restricted to ADMIN\_CHANNEL\_ID).
+
+### **Global Player Commands (Any User, Any Channel)**
 
 | Command | Usage | Description |
 | :---- | :---- | :---- |
-| \!status | \!status | **(Any Channel)** Displays the current online status and player counts for all servers. |
+| \!status | \!status | Displays the current online status and player counts for all configured servers (Minecraft, Palworld, ASA). |
+| \!info | \!info | Displays general information and lists the available player commands. |
+
+### **Administrator Commands (Requires Admin Permission & Designated Channel)**
+
+| Command | Usage | Description |
+| :---- | :---- | :---- |
 | \!say\_mc | \!say\_mc Hello everyone\! | Broadcasts a message to the Minecraft server. |
 | \!ban\_mc | \!ban\_mc PlayerName | Bans a player by name on the Minecraft server. |
-| \!shutdown\_pal | \!shutdown\_pal \[delay\_seconds\] \[message\] | Safely shuts down the Palworld server after a countdown (default 60s). |
+| \!shutdown\_pal | \!shutdown\_pal \[delay\] \[message\] | Safely shuts down the Palworld server after a countdown (default 60s). |
 | \!save\_pal | \!save\_pal | Manually triggers an immediate world save for Palworld. |
-| \!ban\_pal | \!ban\_pal 76561198000000000 | **Bans a player by 17-digit Steam ID.** Adds the ID to the persistent blacklist and attempts an immediate kick. |
-| \!unban\_pal | \!unban\_pal 76561198000000000 | Removes a Steam ID from the persistent blacklist. |
+| \!ban\_pal | \!ban\_pal 76561198... | **Bans a player by 17-digit Steam ID.** Adds the ID to the persistent blacklist. |
+| \!unban\_pal | \!unban\_pal 76561198... | Removes a Steam ID from the persistent blacklist. |
 | \!list\_bans\_pal | \!list\_bans\_pal | Lists all Steam IDs currently on the persistent blacklist. |
 | \!ban\_asa | \!ban\_asa PlayerName | Bans a player by name or ID on the ARK: ASA server. |
 

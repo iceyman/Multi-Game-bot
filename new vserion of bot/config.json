@@ -1,0 +1,137 @@
+{
+    "discord_bot_token": "PASTE_YOUR_DISCORD_BOT_TOKEN_HERE",
+    "database_name": "bot_database.db",
+
+    "server_ips": {
+        "minecraft_ip": "127.0.0.1:25565",
+        "palworld_ip": "127.0.0.1:8211",
+        "ark_ip": "127.0.0.1:7777"
+    },
+    "query_ports": {
+        "palworld_query_port": "27015",
+        "ark_query_port": "27015"
+    },
+    "rcon_settings": {
+        "minecraft_rcon_port": 25575,
+        "minecraft_rcon_pass": "YourMinecraftRconPassword",
+        "palworld_admin_pass": "YourPalworldAdminPassword",
+        "ark_admin_pass": "YourArkAdminPassword"
+    },
+
+    "discord_channel_ids": {
+        "admin_channel_ids": ["PASTE_ADMIN_CHANNEL_ID_HERE"],
+        "minecraft_channel_ids": ["PASTE_MINECRAFT_CHANNEL_ID_HERE"],
+        "palworld_channel_ids": ["PASTE_PALWORLD_CHANNEL_ID_HERE"],
+        "ark_channel_ids": ["PASTE_ARK_CHANNEL_ID_HERE"],
+        
+        "minecraft_chat_relay_channel_id": "PASTE_MC_CHAT_LOG_CHANNEL_ID_HERE",
+        "palworld_chat_relay_channel_id": "PASTE_PAL_CHAT_LOG_CHANNEL_ID_HERE",
+        "ark_chat_relay_channel_id": "PASTE_ARK_CHAT_LOG_CHANNEL_ID_HERE"
+    },
+
+    "cross_server_chat": {
+        "enabled": true,
+        "discord_username_format": "[Discord] {username}"
+    },
+    
+    "server_file_paths": {
+        "minecraft_log_path": "/home/user/minecraft_server/logs/latest.log",
+        "palworld_banlist_path": "/home/user/palworld_server/Pal/Saved/SaveGames/banlist.txt",
+        "palworld_log_path": "/home/user/palworld_server/Pal/Saved/Logs/Pal-dedicated-server.log",
+        "ark_log_path": "/home/user/ark_server/ShooterGame/Saved/Logs/ShooterGame.log"
+    },
+
+    "economy": {
+        "enabled": true,
+        "points_per_chat_message": 1
+    },
+
+    "shop_items": [
+        {
+            "id": "mc_kit_1",
+            "game": "mc",
+            "name": "Minecraft Starter Kit",
+            "cost": 100,
+            "rcon_commands": [
+                "give {in_game_name} stone_sword 1",
+                "give {in_game_name} stone_pickaxe 1",
+                "give {in_game_name} bread 16"
+            ]
+        },
+        {
+            "id": "pal_kit_1",
+            "game": "pal",
+            "name": "Pal Starter Kit",
+            "cost": 100,
+            "rcon_commands": [
+                "GiveItemToPlayer {in_game_name} Wood 50",
+                "GiveItemToPlayer {in_game_name} Stone 50",
+                "GiveItemToPlayer {in_game_name} PalSphere 10"
+            ]
+        },
+        {
+            "id": "ark_kit_1",
+            "game": "ark",
+            "name": "ARK Survivor Kit",
+            "cost": 100,
+            "rcon_commands": [
+                "GiveItemToPlayer {in_game_name} \"Blueprint'/Game/PrimalEarth/CoreBlueprints/Weapons/PrimalItem_WeaponStoneHatchet.PrimalItem_WeaponStoneHatchet'\" 1 0 0",
+                "GiveItemToPlayer {in_game_name} \"Blueprint'/Game/PrimalEarth/CoreBlueprints/Weapons/PrimalItem_WeaponSpear.PrimalItem_WeaponSpear'\" 1 0 0",
+                "GiveItemToPlayer {in_game_name} \"Blueprint'/Game/PrimalEarth/CoreBlueprints/Items/Consumables/PrimalItemConsumable_CookedMeat.PrimalItemConsumable_CookedMeat'\" 10 0 0"
+            ]
+        }
+    ],
+
+    "proactive_management": {
+        "crash_detector": {
+            "enabled": true,
+            "check_interval_seconds": 60,
+            "offline_threshold": 3,
+            "alert_channel_id": "PASTE_ADMIN_CHANNEL_ID_HERE"
+        },
+        "smart_restart": {
+            "enabled": true,
+            "sequence": [
+                {
+                    "time_utc": "03:45",
+                    "message": "SERVER RESTART IN 15 MINUTES. Please log off safely."
+                },
+                {
+                    "time_utc": "03:55",
+                    "message": "SERVER RESTART IN 5 MINUTES. Save your items."
+                },
+                {
+                    "time_utc": "03:59",
+                    "message": "SERVER RESTART NOW. Saving world..."
+                },
+                {
+                    "time_utc": "04:00",
+                    "commands": [
+                        "Save",
+                        "SaveWorld",
+                        "save-all"
+                    ],
+                    "shutdown_commands": [
+                        "Shutdown 60 The_server_is_restarting_in_1_minute",
+                        "DoExit"
+                    ]
+                }
+            ]
+        }
+    },
+
+    "links": {
+        "Palworld Wiki": "https://palworld.fandom.com/wiki/Palworld_Wiki",
+        "ARK: ASA Wiki": "https://ark.fandom.com/wiki/ARK_Survival_Ascended",
+        "Minecraft Wiki": "https://minecraft.fandom.com/wiki/Minecraft_Wiki"
+    },
+
+    "embed_images": {
+        "admin_icon": "https://i.imgur.com/g9s5Q9A.png",
+        "utility_icon": "https://i.imgur.com/8VAl4QO.png",
+        "economy_icon": "https://i.imgur.com/N32N0tC.png",
+        "minecraft_icon": "https://i.imgur.com/4kXf0Ch.png",
+        "palworld_icon": "https://i.imgur.com/j3fA8hT.png",
+        "ark_icon": "https://i.imgur.com/uGgUfB8.png"
+    }
+}
